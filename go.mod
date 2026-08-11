@@ -1,4 +1,4 @@
-module github.com/tacheraSasi/notify-africa-go
+module github.com/tacheraSasi/go-money
 
 go 1.26.2
 
