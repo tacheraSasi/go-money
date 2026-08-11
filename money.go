@@ -1,0 +1,135 @@
+// Package money provides a Money type that wraps shopspring/decimal to
+// preserve monetary precision in storage and arithmetic, while serializing
+// as a JSON number so the existing float64-based API contract stays intact.
+//
+// Use this for any currency amount stored in the database or used in
+// billing arithmetic. Do NOT use it for non-money floats (CPU percent,
+// memory, exchange rates, etc.) those stay float64.
+package money
+
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
+	"strings"
+
+	"github.com/shopspring/decimal"
+)
+
+// Money is a precise monetary amount. The zero value is 0.
+type Money struct {
+	decimal.Decimal
+}
+
+// New wraps a decimal.Decimal.
+func New(d decimal.Decimal) Money { return Money{Decimal: d} }
+
+// FromFloat creates a Money from a float64. Use for inputs only; prefer
+// FromString or arithmetic on existing Money values when precision matters.
+func FromFloat(f float64) Money { return Money{Decimal: decimal.NewFromFloat(f)} }
+
+// FromInt creates a Money from an int64.
+func FromInt(i int64) Money { return Money{Decimal: decimal.NewFromInt(i)} }
+
+// FromString creates a Money from a decimal string (e.g. "9.99").
+func FromString(s string) (Money, error) {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		return Money{}, err
+	}
+	return Money{Decimal: d}, nil
+}
+
+// Zero returns a zero-valued Money.
+func Zero() Money { return Money{Decimal: decimal.Zero} }
+
+// Scan implements sql.Scanner so GORM can read DECIMAL/NUMERIC/TEXT columns.
+func (m *Money) Scan(src any) error {
+	if src == nil {
+		m.Decimal = decimal.Zero
+		return nil
+	}
+	return m.Decimal.Scan(src)
+}
+
+// Value implements driver.Valuer so GORM writes the precise decimal value.
+func (m Money) Value() (driver.Value, error) {
+	return m.Decimal.Value()
+}
+
+// GormDataType hints the underlying DB type for migrations.
+func (m Money) GormDataType() string { return "decimal" }
+
+// MarshalJSON emits Money as a JSON number to preserve the existing
+// float64-based API contract. Precision is preserved in storage and backend
+// arithmetic; the JSON boundary intentionally rounds to float64 since client
+// magnitudes (wallet balances, plan prices) fit cleanly in a float64.
+func (m Money) MarshalJSON() ([]byte, error) {
+	f, _ := m.Decimal.Float64()
+	return json.Marshal(f)
+}
+
+// UnmarshalJSON accepts both JSON numbers and decimal strings, so clients may
+// send either form.
+func (m *Money) UnmarshalJSON(b []byte) error {
+	s := strings.TrimSpace(string(b))
+	if s == "null" || s == "" {
+		m.Decimal = decimal.Zero
+		return nil
+	}
+	if strings.HasPrefix(s, "\"") {
+		var str string
+		if err := json.Unmarshal(b, &str); err != nil {
+			return err
+		}
+		d, err := decimal.NewFromString(str)
+		if err != nil {
+			return err
+		}
+		m.Decimal = d
+		return nil
+	}
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		return errors.New("money: invalid amount: " + s)
+	}
+	m.Decimal = d
+	return nil
+}
+
+// String returns the canonical decimal string.
+func (m Money) String() string { return m.Decimal.String() }
+
+// Float returns the value as a float64 (handy for printf with %f).
+func (m Money) Float() float64 {
+	f, _ := m.Decimal.Float64()
+	return f
+}
+
+// ── Arithmetic ───────────────────────────────────────────────────────────
+
+func (m Money) Add(o Money) Money { return Money{Decimal: m.Decimal.Add(o.Decimal)} }
+func (m Money) Sub(o Money) Money { return Money{Decimal: m.Decimal.Sub(o.Decimal)} }
+func (m Money) Mul(o Money) Money { return Money{Decimal: m.Decimal.Mul(o.Decimal)} }
+func (m Money) Div(o Money) Money { return Money{Decimal: m.Decimal.Div(o.Decimal)} }
+
+// MulFloat scales a Money by a float64 factor (e.g. quantity, tax rate).
+func (m Money) MulFloat(f float64) Money {
+	return Money{Decimal: m.Decimal.Mul(decimal.NewFromFloat(f))}
+}
+
+// DivFloat divides a Money by a float64 (e.g. exchange rate).
+func (m Money) DivFloat(f float64) Money {
+	return Money{Decimal: m.Decimal.Div(decimal.NewFromFloat(f))}
+}
+
+// ── Comparisons ──────────────────────────────────────────────────────────
+
+func (m Money) LessThan(o Money) bool           { return m.Decimal.LessThan(o.Decimal) }
+func (m Money) LessThanOrEqual(o Money) bool    { return m.Decimal.LessThanOrEqual(o.Decimal) }
+func (m Money) GreaterThan(o Money) bool        { return m.Decimal.GreaterThan(o.Decimal) }
+func (m Money) GreaterThanOrEqual(o Money) bool { return m.Decimal.GreaterThanOrEqual(o.Decimal) }
+func (m Money) Equals(o Money) bool             { return m.Decimal.Equal(o.Decimal) }
+func (m Money) IsZero() bool                    { return m.Decimal.IsZero() }
+func (m Money) IsPositive() bool                { return m.Decimal.IsPositive() }
+func (m Money) IsNegative() bool                { return m.Decimal.IsNegative() }
