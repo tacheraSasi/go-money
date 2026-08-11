@@ -339,13 +339,35 @@ func TestUnmarshalJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(`"abc"`), new(Money)); err == nil {
 		t.Error("UnmarshalJSON(invalid string): expected error, got nil")
 	}
-	// Invalid JSON token.
+	// Invalid JSON token: encoding/json rejects this before the hook runs.
 	if err := json.Unmarshal([]byte(`abc`), new(Money)); err == nil {
 		t.Error("UnmarshalJSON(invalid token): expected error, got nil")
 	}
 	// Empty quoted string is not a valid decimal and must error.
 	if err := json.Unmarshal([]byte(`""`), new(Money)); err == nil {
 		t.Error("UnmarshalJSON(empty quoted string): expected error, got nil")
+	}
+}
+
+// TestUnmarshalJSON_DirectErrors pins the internal error branches that are
+// unreachable via json.Unmarshal, because encoding/json validates the token
+// boundary before delegating to the hook. Calling UnmarshalJSON directly
+// exercises the hook's own error returns for malformed quoted strings and
+// non-numeric unquoted tokens.
+func TestUnmarshalJSON_DirectErrors(t *testing.T) {
+	cases := [][]byte{
+		[]byte(`"9.99`), // unterminated quoted string: inner json.Unmarshal fails
+		[]byte(`abc`),   // non-numeric unquoted token: decimal.NewFromString fails
+		[]byte(`""`),    // empty quoted string is not a valid decimal
+	}
+	for _, in := range cases {
+		var m Money
+		if err := m.UnmarshalJSON(in); err == nil {
+			t.Errorf("UnmarshalJSON(%s): expected error, got nil", in)
+		}
+		if !m.IsZero() {
+			t.Errorf("UnmarshalJSON(%s): on error got %s, want unchanged 0", in, m.String())
+		}
 	}
 }
 
