@@ -101,9 +101,18 @@ func (m Money) Float() float64 {
 
 // ── Arithmetic ───────────────────────────────────────────────────────────
 
+// Add returns the sum of m and o. Neither value is mutated.
 func (m Money) Add(o Money) Money { return Money{Decimal: m.Decimal.Add(o.Decimal)} }
+
+// Sub returns the difference m minus o.
 func (m Money) Sub(o Money) Money { return Money{Decimal: m.Decimal.Sub(o.Decimal)} }
+
+// Mul returns the product of m and o. Prefer MulFloat when scaling by a
+// non-monetary factor such as a quantity or a tax rate.
 func (m Money) Mul(o Money) Money { return Money{Decimal: m.Decimal.Mul(o.Decimal)} }
+
+// Div returns the quotient m divided by o. Division by zero panics, the
+// same as shopspring/decimal.
 func (m Money) Div(o Money) Money { return Money{Decimal: m.Decimal.Div(o.Decimal)} }
 
 // MulFloat scales a Money by a float64 factor (e.g. quantity, tax rate).
@@ -118,11 +127,26 @@ func (m Money) DivFloat(f float64) Money {
 
 // ── Comparisons ──────────────────────────────────────────────────────────
 
-func (m Money) LessThan(o Money) bool           { return m.Decimal.LessThan(o.Decimal) }
-func (m Money) LessThanOrEqual(o Money) bool    { return m.Decimal.LessThanOrEqual(o.Decimal) }
-func (m Money) GreaterThan(o Money) bool        { return m.Decimal.GreaterThan(o.Decimal) }
+// LessThan reports whether m is strictly less than o.
+func (m Money) LessThan(o Money) bool { return m.Decimal.LessThan(o.Decimal) }
+
+// LessThanOrEqual reports whether m is less than or equal to o.
+func (m Money) LessThanOrEqual(o Money) bool { return m.Decimal.LessThanOrEqual(o.Decimal) }
+
+// GreaterThan reports whether m is strictly greater than o.
+func (m Money) GreaterThan(o Money) bool { return m.Decimal.GreaterThan(o.Decimal) }
+
+// GreaterThanOrEqual reports whether m is greater than or equal to o.
 func (m Money) GreaterThanOrEqual(o Money) bool { return m.Decimal.GreaterThanOrEqual(o.Decimal) }
-func (m Money) Equals(o Money) bool             { return m.Decimal.Equal(o.Decimal) }
-func (m Money) IsZero() bool                    { return m.Decimal.IsZero() }
-func (m Money) IsPositive() bool                { return m.Decimal.IsPositive() }
-func (m Money) IsNegative() bool                { return m.Decimal.IsNegative() }
+
+// Equals reports whether m and o represent the same amount.
+func (m Money) Equals(o Money) bool { return m.Decimal.Equal(o.Decimal) }
+
+// IsZero reports whether m is exactly zero.
+func (m Money) IsZero() bool { return m.Decimal.IsZero() }
+
+// IsPositive reports whether m is greater than zero.
+func (m Money) IsPositive() bool { return m.Decimal.IsPositive() }
+
+// IsNegative reports whether m is less than zero.
+func (m Money) IsNegative() bool { return m.Decimal.IsNegative() }
